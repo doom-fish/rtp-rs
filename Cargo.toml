@@ -1,0 +1,64 @@
+[package]
+name = "rtp-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.76"
+license = "MIT OR Apache-2.0"
+description = "Pure-Rust, zero-dependency RTP/RTCP (RFC 3550) codec with RFC 8285 extensions, feedback messages, and H.264 / Opus payload packetizers"
+authors = ["Per Johansson <per@doom.fish>"]
+homepage = "https://github.com/doom-fish/rtp-rs"
+repository = "https://github.com/doom-fish/rtp-rs"
+keywords = ["rtp", "rtcp", "webrtc", "h264", "opus"]
+categories = ["multimedia", "network-programming", "encoding"]
+readme = "README.md"
+build = "build.rs"
+publish = false
+include = [
+    "src/**/*",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-*",
+    "CHANGELOG.md",
+    "COVERAGE.md",
+]
+
+[lib]
+name = "rtp"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[features]
+default = []
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
+[dependencies]
+# Zero runtime dependencies — pure binary codec built on std + core integers.
+
+[dev-dependencies]
+
+[[example]]
+name = "01_parse_packet"
+path = "examples/01_parse_packet.rs"
+
+[[example]]
+name = "02_build_packet"
+path = "examples/02_build_packet.rs"
+
+[[example]]
+name = "03_h264_packetize"
+path = "examples/03_h264_packetize.rs"
+
+[[example]]
+name = "04_rtcp_compound"
+path = "examples/04_rtcp_compound.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[badges]
+maintenance = { status = "actively-developed" }
