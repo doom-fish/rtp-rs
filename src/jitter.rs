@@ -16,7 +16,7 @@
 #[derive(Clone, Debug, Default)]
 pub struct Jitter {
     jitter: f64,
-    last_transit: i64,
+    last_transit: i32,
     have_prev: bool,
 }
 
@@ -37,10 +37,10 @@ impl Jitter {
     /// Both are 32-bit values that may wrap; the transit difference is computed
     /// with wrapping subtraction so wrap is handled transparently.
     pub fn update(&mut self, rtp_timestamp: u32, arrival: u32) {
-        let transit = i64::from(arrival.wrapping_sub(rtp_timestamp) as i32);
+        let transit = arrival.wrapping_sub(rtp_timestamp) as i32;
         if self.have_prev {
-            let d = (transit - self.last_transit).abs();
-            self.jitter += (d as f64 - self.jitter) / 16.0;
+            let d = transit.wrapping_sub(self.last_transit).unsigned_abs();
+            self.jitter += (f64::from(d) - self.jitter) / 16.0;
         } else {
             self.have_prev = true;
         }

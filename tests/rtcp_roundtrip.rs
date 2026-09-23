@@ -147,3 +147,24 @@ fn twcc_statuses() -> Vec<Delta> {
         Delta::Large(300),
     ]
 }
+
+#[test]
+fn nack_packs_losses_across_the_sequence_wrap() {
+    use rtp::rtcp::nack::{Nack, NackEntry};
+
+    let nack = Nack::from_lost(1, 2, &[1, 65535, 0, 65534]);
+    assert_eq!(
+        nack.entries,
+        vec![NackEntry {
+            pid: 65534,
+            blp: 0b111
+        }]
+    );
+    assert_eq!(nack.lost_sequence_numbers(), vec![65534, 65535, 0, 1]);
+
+    let spread = Nack::from_lost(1, 2, &[3, 40_000, 65_530]);
+    assert_eq!(spread.entries.len(), 2);
+    let mut lost = spread.lost_sequence_numbers();
+    lost.sort_unstable();
+    assert_eq!(lost, vec![3, 40_000, 65_530]);
+}

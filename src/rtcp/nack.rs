@@ -37,6 +37,13 @@ impl Nack {
         let mut sorted: Vec<u16> = lost.to_vec();
         sorted.sort_unstable();
         sorted.dedup();
+        let n = sorted.len();
+        if n > 1 {
+            let widest_gap = (0..n)
+                .max_by_key(|&i| sorted[(i + 1) % n].wrapping_sub(sorted[i]))
+                .unwrap_or(n - 1);
+            sorted.rotate_left((widest_gap + 1) % n);
+        }
 
         let mut entries: Vec<NackEntry> = Vec::new();
         for &seq in &sorted {

@@ -112,7 +112,7 @@ impl SourceState {
                 self.max_seq = seq;
                 if self.probation == 0 {
                     self.init_seq(seq);
-                    self.received += 1;
+                    self.received = self.received.wrapping_add(1);
                     return true;
                 }
             } else {
@@ -124,7 +124,7 @@ impl SourceState {
             // In order, with permissible gap.
             if seq < self.max_seq {
                 // Sequence number wrapped.
-                self.cycles += RTP_SEQ_MOD;
+                self.cycles = self.cycles.wrapping_add(RTP_SEQ_MOD);
             }
             self.max_seq = seq;
         } else if udelta <= RTP_SEQ_MOD - MAX_MISORDER {
@@ -139,14 +139,14 @@ impl SourceState {
         } else {
             // Duplicate or reordered packet.
         }
-        self.received += 1;
+        self.received = self.received.wrapping_add(1);
         true
     }
 
     /// Extended (cycle-aware) highest sequence number received.
     #[must_use]
     pub fn extended_max(&self) -> u32 {
-        self.cycles + u32::from(self.max_seq)
+        self.cycles.wrapping_add(u32::from(self.max_seq))
     }
 
     /// Total packets expected since the base sequence number.
@@ -180,7 +180,7 @@ impl SourceState {
         if expected_interval == 0 || (lost_interval as i32) <= 0 {
             0
         } else {
-            ((lost_interval << 8) / expected_interval) as u8
+            ((u64::from(lost_interval) << 8) / u64::from(expected_interval)).min(255) as u8
         }
     }
 

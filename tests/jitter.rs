@@ -35,3 +35,17 @@ fn jitter_handles_timestamp_wrap() {
     j.update(0x0000_0060, 0x0000_0060); // +0x160 both, D == 0
     assert_eq!(j.value(), 0);
 }
+
+#[test]
+fn transit_crossing_the_signed_32_bit_boundary_does_not_spike() {
+    let mut j = Jitter::new();
+    j.update(0, 0x7FFF_FFF0);
+    j.update(160, 0x7FFF_FFF0 + 180);
+    assert!((j.value_f64() - 1.25).abs() < 1e-9, "got {}", j.value_f64());
+    assert_eq!(j.value(), 1);
+
+    for k in 2..400u32 {
+        j.update(k * 160, (0x7FFF_FFF0_u32 + 20).wrapping_add(k * 160));
+    }
+    assert!(j.value() < 2, "jitter spiked to {}", j.value());
+}

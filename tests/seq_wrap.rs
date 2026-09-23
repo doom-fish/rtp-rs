@@ -53,3 +53,44 @@ fn cumulative_loss_counts_gaps() {
     // expected spans 1..=4 (4 packets) from base; received = 3.
     assert!(s.cumulative_lost() >= 1);
 }
+
+#[test]
+fn fraction_lost_saturates_at_total_loss() {
+    let mut s = SourceState::new(100);
+    assert!(!s.update(100));
+    assert_eq!(s.expected(), 1);
+    assert_eq!(s.received(), 0);
+    assert_eq!(s.fraction_lost(), 255);
+}
+
+#[test]
+fn fraction_lost_reports_partial_loss() {
+    let mut s = SourceState::new(0);
+    s.update(0);
+    s.update(1);
+    assert_eq!(s.fraction_lost(), 0);
+    s.update(3);
+    s.update(5);
+    assert_eq!(s.fraction_lost(), 128);
+}
+
+#[test]
+fn counters_wrap_instead_of_overflowing() {
+    let mut s = SourceState::new(0);
+    s.update(0);
+    s.update(1);
+    let mut seq = 1u16;
+    let mut wraps = 0u32;
+    while wraps <= 65_536 {
+        let next = seq.wrapping_add(2999);
+        if next < seq {
+            wraps += 1;
+        }
+        seq = next;
+        assert!(s.update(seq));
+    }
+    assert_eq!(
+        s.extended_max(),
+        u32::from(seq).wrapping_add(wraps.wrapping_mul(65_536))
+    );
+}
