@@ -5,7 +5,7 @@ use rtp::rtcp::remb::Remb;
 use rtp::rtcp::rr::{ReceiverReport, ReportBlock};
 use rtp::rtcp::sdes::{Sdes, SdesChunk, SdesItem};
 use rtp::rtcp::sr::SenderReport;
-use rtp::rtcp::twcc::{Delta, Twcc};
+use rtp::rtcp::twcc::{Delta, Twcc, MAX_STATUSES};
 use rtp::{CompoundPacket, Error, Extension, Packet, RtcpPacket, RtpPacket};
 
 const fn too_large(what: &'static str, max: usize, actual: usize) -> Error {
@@ -143,15 +143,28 @@ fn remb_ssrc_count_must_fit_one_byte() {
 }
 
 #[test]
-fn twcc_status_count_must_fit_sixteen_bits() {
+fn twcc_encoding_is_capped_like_parsing() {
     let twcc = Twcc {
-        statuses: vec![Delta::NotReceived; 65_536],
+        statuses: vec![Delta::NotReceived; MAX_STATUSES + 1],
         ..Twcc::default()
     };
     assert_eq!(
         twcc.encode(),
-        Err(too_large("TWCC packet status count", 65_535, 65_536))
+        Err(too_large(
+            "TWCC packet status count",
+            MAX_STATUSES,
+            MAX_STATUSES + 1
+        ))
     );
+
+    let full = Twcc {
+        statuses: vec![Delta::NotReceived; MAX_STATUSES],
+        ..Twcc::default()
+    };
+    let RtcpPacket::Twcc(parsed) = RtcpPacket::parse(&full.encode().unwrap()).unwrap() else {
+        panic!("expected TWCC");
+    };
+    assert_eq!(parsed.statuses.len(), MAX_STATUSES);
 }
 
 #[test]

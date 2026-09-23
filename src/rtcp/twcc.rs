@@ -62,13 +62,14 @@ impl Twcc {
     /// Serialize this packet (with header), including 32-bit padding.
     ///
     /// # Errors
-    /// Returns [`Error::TooLarge`] for more than 65 535 statuses or a packet
-    /// longer than the RTCP length field can describe.
+    /// Returns [`Error::TooLarge`] for more than [`MAX_STATUSES`] statuses (the
+    /// limit [`Twcc::parse`] accepts) or a packet longer than the RTCP length
+    /// field can describe.
     pub fn encode(&self) -> Result<Vec<u8>> {
         ensure_at_most(
             "TWCC packet status count",
             self.statuses.len(),
-            usize::from(u16::MAX),
+            MAX_STATUSES,
         )?;
         let mut body = Vec::new();
         body.extend_from_slice(&self.sender_ssrc.to_be_bytes());
