@@ -14,7 +14,7 @@ path from a sibling checkout:
 
 ```toml
 [dependencies]
-rtp = { package = "rtp-rs", path = "../rtp-rs", version = "0.1" }
+rtp = { package = "rtp-rs", path = "../rtp-rs", version = "0.2" }
 ```
 
 ## Features
