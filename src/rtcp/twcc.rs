@@ -11,10 +11,13 @@
 //! chunks (1-bit and 2-bit) for interoperability with WebRTC peers and SFUs.
 
 use super::{be_u32, write_header, Header, PT_RTPFB};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// RTPFB feedback message type for transport-wide CC.
 pub const FMT: u8 = 15;
+
+#[allow(missing_docs)]
+pub const MAX_STATUSES: usize = 1 << 15;
 
 /// Arrival status of one packet in a TWCC report.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,19 +112,22 @@ impl Twcc {
     /// Parse a TWCC packet from its bytes.
     ///
     /// # Errors
-    /// Returns [`Error::Truncated`] or [`Error::BadPayload`] on malformed input.
+    /// Returns [`Error::Truncated`] or [`Error::BadPayload`] on malformed input,
+    /// and [`Error::TooLarge`] when the packet announces more than
+    /// [`MAX_STATUSES`] statuses.
     pub fn parse(buf: &[u8]) -> Result<Self> {
         let h = Header::parse(buf)?;
-        if h.total_len < 20 {
+        if h.content_len < 20 {
             return Err(Error::Truncated {
                 needed: 20,
-                got: h.total_len,
+                got: h.content_len,
             });
         }
         let sender_ssrc = be_u32(buf, 4);
         let media_ssrc = be_u32(buf, 8);
         let base_seq = u16::from_be_bytes([buf[12], buf[13]]);
         let status_count = u16::from_be_bytes([buf[14], buf[15]]) as usize;
+        ensure_at_most("TWCC packet status count", status_count, MAX_STATUSES)?;
         let rt_raw = (u32::from(buf[16]) << 16) | (u32::from(buf[17]) << 8) | u32::from(buf[18]);
         // sign-extend 24-bit
         let reference_time = if rt_raw & 0x0080_0000 != 0 {
@@ -135,10 +141,10 @@ impl Twcc {
         let mut symbols: Vec<u8> = Vec::with_capacity(status_count);
         let mut off = 20;
         while symbols.len() < status_count {
-            if off + 2 > h.total_len {
+            if off + 2 > h.content_len {
                 return Err(Error::Truncated {
                     needed: off + 2,
-                    got: h.total_len,
+                    got: h.content_len,
                 });
             }
             let chunk = u16::from_be_bytes([buf[off], buf[off + 1]]);
@@ -178,20 +184,20 @@ impl Twcc {
             match sym {
                 0 | 3 => statuses.push(Delta::NotReceived),
                 1 => {
-                    if off + 1 > h.total_len {
+                    if off + 1 > h.content_len {
                         return Err(Error::Truncated {
                             needed: off + 1,
-                            got: h.total_len,
+                            got: h.content_len,
                         });
                     }
                     statuses.push(Delta::Small(buf[off]));
                     off += 1;
                 }
                 2 => {
-                    if off + 2 > h.total_len {
+                    if off + 2 > h.content_len {
                         return Err(Error::Truncated {
                             needed: off + 2,
-                            got: h.total_len,
+                            got: h.content_len,
                         });
                     }
                     statuses.push(Delta::Large(i16::from_be_bytes([buf[off], buf[off + 1]])));

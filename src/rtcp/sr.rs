@@ -63,10 +63,10 @@ impl SenderReport {
     /// Returns [`Error::Truncated`] if the buffer is short.
     pub fn parse(buf: &[u8]) -> Result<Self> {
         let h = Header::parse(buf)?;
-        if h.total_len < 28 {
+        if h.content_len < 28 {
             return Err(Error::Truncated {
                 needed: 28,
-                got: h.total_len,
+                got: h.content_len,
             });
         }
         let ssrc = be_u32(buf, 4);
@@ -79,10 +79,10 @@ impl SenderReport {
         let mut reports = Vec::with_capacity(h.count as usize);
         let mut off = 28;
         for _ in 0..h.count {
-            if off + ReportBlock::LEN > h.total_len {
+            if off + ReportBlock::LEN > h.content_len {
                 return Err(Error::Truncated {
                     needed: off + ReportBlock::LEN,
-                    got: h.total_len,
+                    got: h.content_len,
                 });
             }
             reports.push(ReportBlock::parse(buf, off));

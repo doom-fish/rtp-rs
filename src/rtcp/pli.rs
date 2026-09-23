@@ -34,10 +34,10 @@ impl Pli {
     /// Returns [`Error::Truncated`] if the buffer is short.
     pub fn parse(buf: &[u8]) -> Result<Self> {
         let h = Header::parse(buf)?;
-        if h.total_len < 12 {
+        if h.content_len < 12 {
             return Err(Error::Truncated {
                 needed: 12,
-                got: h.total_len,
+                got: h.content_len,
             });
         }
         Ok(Self {

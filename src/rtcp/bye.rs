@@ -52,22 +52,22 @@ impl Bye {
         let mut off = 4;
         let mut sources = Vec::with_capacity(h.count as usize);
         for _ in 0..h.count {
-            if off + 4 > h.total_len {
+            if off + 4 > h.content_len {
                 return Err(Error::Truncated {
                     needed: off + 4,
-                    got: h.total_len,
+                    got: h.content_len,
                 });
             }
             sources.push(be_u32(buf, off));
             off += 4;
         }
-        let reason = if off < h.total_len {
+        let reason = if off < h.content_len {
             let len = buf[off] as usize;
             off += 1;
-            if off + len > h.total_len {
+            if off + len > h.content_len {
                 return Err(Error::Truncated {
                     needed: off + len,
-                    got: h.total_len,
+                    got: h.content_len,
                 });
             }
             Some(buf[off..off + len].to_vec())

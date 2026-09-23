@@ -92,10 +92,10 @@ impl Sdes {
         let mut chunks = Vec::with_capacity(h.count as usize);
         let mut off = 4;
         for _ in 0..h.count {
-            if off + 4 > h.total_len {
+            if off + 4 > h.content_len {
                 return Err(Error::Truncated {
                     needed: off + 4,
-                    got: h.total_len,
+                    got: h.content_len,
                 });
             }
             let source = be_u32(buf, off);
@@ -103,7 +103,7 @@ impl Sdes {
             off += 4;
             let mut items = Vec::new();
             loop {
-                if off >= h.total_len {
+                if off >= h.content_len {
                     return Err(Error::BadCompound("SDES chunk missing terminator"));
                 }
                 let item_type = buf[off];
@@ -111,18 +111,18 @@ impl Sdes {
                     off += 1;
                     break;
                 }
-                if off + 1 >= h.total_len {
+                if off + 1 >= h.content_len {
                     return Err(Error::Truncated {
                         needed: off + 2,
-                        got: h.total_len,
+                        got: h.content_len,
                     });
                 }
                 let len = buf[off + 1] as usize;
                 off += 2;
-                if off + len > h.total_len {
+                if off + len > h.content_len {
                     return Err(Error::Truncated {
                         needed: off + len,
-                        got: h.total_len,
+                        got: h.content_len,
                     });
                 }
                 items.push(SdesItem {

@@ -52,17 +52,17 @@ impl Fir {
     /// Returns [`Error::Truncated`] if the buffer is short.
     pub fn parse(buf: &[u8]) -> Result<Self> {
         let h = Header::parse(buf)?;
-        if h.total_len < 12 {
+        if h.content_len < 12 {
             return Err(Error::Truncated {
                 needed: 12,
-                got: h.total_len,
+                got: h.content_len,
             });
         }
         let sender_ssrc = be_u32(buf, 4);
         let media_ssrc = be_u32(buf, 8);
         let mut entries = Vec::new();
         let mut off = 12;
-        while off + 8 <= h.total_len {
+        while off + 8 <= h.content_len {
             entries.push(FirEntry {
                 ssrc: be_u32(buf, off),
                 seq_nr: buf[off + 4],

@@ -171,7 +171,9 @@ impl RtcpPacket {
                 pli::FMT => Ok(Self::Pli(pli::Pli::parse(buf)?)),
                 sli::FMT => Ok(Self::Sli(sli::Sli::parse(buf)?)),
                 fir::FMT => Ok(Self::Fir(fir::Fir::parse(buf)?)),
-                remb::FMT => Ok(Self::Remb(remb::Remb::parse(buf)?)),
+                remb::FMT if h.content_len >= 16 && buf[12..16] == remb::IDENTIFIER => {
+                    Ok(Self::Remb(remb::Remb::parse(buf)?))
+                }
                 _ => Err(Error::Unsupported("unknown PSFB feedback type")),
             },
             _ => Err(Error::Unsupported("unknown RTCP payload type")),
@@ -211,6 +213,7 @@ pub(crate) struct Header {
     /// Total packet length in bytes (header + body), derived from the length
     /// field.
     pub total_len: usize,
+    pub content_len: usize,
 }
 
 impl Header {
@@ -226,6 +229,7 @@ impl Header {
         if version != 2 {
             return Err(Error::BadVersion(version));
         }
+        let padding = b0 & 0x20 != 0;
         let count = b0 & 0x1F;
         let pt = buf[1];
         let words = u16::from_be_bytes([buf[2], buf[3]]) as usize;
@@ -236,10 +240,20 @@ impl Header {
                 got: buf.len(),
             });
         }
+        let content_len = if padding {
+            let pad = usize::from(buf[total_len - 1]);
+            if pad == 0 || pad > total_len - 4 {
+                return Err(Error::BadPadding(pad));
+            }
+            total_len - pad
+        } else {
+            total_len
+        };
         Ok(Self {
             count,
             pt,
             total_len,
+            content_len,
         })
     }
 }

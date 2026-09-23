@@ -67,10 +67,10 @@ impl Remb {
     /// Returns [`Error::Truncated`] or [`Error::BadPayload`] on malformed input.
     pub fn parse(buf: &[u8]) -> Result<Self> {
         let h = Header::parse(buf)?;
-        if h.total_len < 20 {
+        if h.content_len < 20 {
             return Err(Error::Truncated {
                 needed: 20,
-                got: h.total_len,
+                got: h.content_len,
             });
         }
         let sender_ssrc = be_u32(buf, 4);
@@ -82,14 +82,17 @@ impl Remb {
         let exp = (buf[17] >> 2) & 0x3F;
         let mantissa =
             (u32::from(buf[17] & 0x03) << 16) | (u32::from(buf[18]) << 8) | u32::from(buf[19]);
-        let bitrate_bps = u64::from(mantissa) << exp;
+        let bitrate_bps = u64::from(mantissa)
+            .checked_shl(u32::from(exp))
+            .filter(|bps| bps >> exp == u64::from(mantissa))
+            .ok_or(Error::BadPayload("REMB bitrate does not fit in 64 bits"))?;
         let mut ssrcs = Vec::with_capacity(num);
         let mut off = 20;
         for _ in 0..num {
-            if off + 4 > h.total_len {
+            if off + 4 > h.content_len {
                 return Err(Error::Truncated {
                     needed: off + 4,
-                    got: h.total_len,
+                    got: h.content_len,
                 });
             }
             ssrcs.push(be_u32(buf, off));

@@ -6,7 +6,7 @@
 //! RTCP, RFC 5506, is in use — not handled here) so that statistics are always
 //! carried.
 
-use super::{Header, RtcpPacket};
+use super::{Header, RtcpPacket, PT_RR, PT_SR};
 use crate::error::{Error, Result};
 
 /// A sequence of RTCP packets transmitted together in one datagram.
@@ -69,21 +69,33 @@ impl CompoundPacket {
 
     /// Parse and validate a compound packet from a datagram.
     ///
+    /// Packets of an unknown type are skipped, as in
+    /// [`parse_lenient`](Self::parse_lenient), but the first packet in the
+    /// datagram must still be a Sender or Receiver Report.
+    ///
     /// # Errors
     /// Propagates parse errors and returns [`Error::BadCompound`] if the
     /// first-packet rule is violated.
     pub fn parse(buf: &[u8]) -> Result<Self> {
         let compound = Self::parse_lenient(buf)?;
         compound.validate()?;
+        if !matches!(buf.get(1), Some(&(PT_SR | PT_RR))) {
+            return Err(Error::BadCompound(
+                "first packet must be a Sender or Receiver Report",
+            ));
+        }
         Ok(compound)
     }
 
     /// Parse a compound packet **without** enforcing the first-packet rule.
     ///
     /// Useful for reduced-size RTCP or for inspecting malformed streams.
+    /// Packets of a type this crate does not model (for example XR, TMMBR or
+    /// application-layer feedback other than REMB) are skipped rather than
+    /// failing the whole datagram.
     ///
     /// # Errors
-    /// Propagates per-packet parse errors.
+    /// Propagates per-packet parse errors of the known packet types.
     pub fn parse_lenient(buf: &[u8]) -> Result<Self> {
         let mut packets = Vec::new();
         let mut off = 0;
@@ -96,7 +108,11 @@ impl CompoundPacket {
                     got: buf.len(),
                 });
             }
-            packets.push(RtcpPacket::parse(&buf[off..end])?);
+            match RtcpPacket::parse(&buf[off..end]) {
+                Ok(packet) => packets.push(packet),
+                Err(Error::Unsupported(_)) => {}
+                Err(e) => return Err(e),
+            }
             off = end;
         }
         Ok(Self { packets })
