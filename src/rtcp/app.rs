@@ -32,7 +32,7 @@ impl App {
         body.extend_from_slice(&self.name);
         body.extend_from_slice(&self.data);
         let pad = (4 - body.len() % 4) % 4;
-        body.extend(std::iter::repeat(0u8).take(pad));
+        body.extend(std::iter::repeat_n(0u8, pad));
         let mut out = Vec::with_capacity(4 + body.len());
         write_header(&mut out, self.subtype, PT_APP, body.len())?;
         out.extend_from_slice(&body);

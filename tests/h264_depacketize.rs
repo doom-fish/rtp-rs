@@ -80,7 +80,7 @@ fn fu_a_without_end_bit_is_capped() {
     assert_eq!(depack.push(0, &start).unwrap(), None);
 
     let mut middle = vec![0x7Cu8, 0x01];
-    middle.extend(std::iter::repeat(0x55).take(300));
+    middle.extend(std::iter::repeat_n(0x55, 300));
     let mut seq = 1u16;
     let err = loop {
         match depack.push(seq, &middle) {
@@ -111,9 +111,9 @@ fn fu_a_without_end_bit_is_capped() {
 #[test]
 fn lost_middle_fragment_is_not_spliced() {
     let mut first = vec![0x65u8];
-    first.extend(std::iter::repeat(0x11).take(500));
+    first.extend(std::iter::repeat_n(0x11, 500));
     let mut second = vec![0x65u8];
-    second.extend(std::iter::repeat(0x22).take(500));
+    second.extend(std::iter::repeat_n(0x22, 500));
 
     let packetizer = Packetizer::new(200);
     let a = packetizer.packetize(&first);

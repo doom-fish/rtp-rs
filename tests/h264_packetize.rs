@@ -14,7 +14,7 @@ fn small_nal_is_sent_as_single() {
 #[test]
 fn large_nal_fragments_into_fu_a() {
     let mut nal = vec![0x65u8]; // IDR header
-    nal.extend(std::iter::repeat(0xAB).take(1000));
+    nal.extend(std::iter::repeat_n(0xAB, 1000));
 
     let pkts = Packetizer::new(300).packetize(&nal);
     assert!(pkts.len() >= 4);

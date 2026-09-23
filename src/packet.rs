@@ -368,7 +368,7 @@ impl RtpPacketBuilder {
             let (profile, mut data) = extension::encode(&self.extensions)?;
             // Pad the extension block to a 32-bit word boundary.
             let pad = padding::pad_to(data.len(), 4);
-            data.extend(std::iter::repeat(0u8).take(pad));
+            data.extend(std::iter::repeat_n(0u8, pad));
             self.header.extension = true;
             self.header.ext_profile = profile;
             self.header.ext_data = data;

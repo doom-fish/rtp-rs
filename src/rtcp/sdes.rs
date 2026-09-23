@@ -82,7 +82,7 @@ impl Sdes {
             body.push(0);
             let chunk_len = body.len() - start;
             let pad = (4 - chunk_len % 4) % 4;
-            body.extend(std::iter::repeat(0u8).take(pad));
+            body.extend(std::iter::repeat_n(0u8, pad));
         }
         let mut out = Vec::with_capacity(4 + body.len());
         write_header(&mut out, self.chunks.len() as u8, PT_SDES, body.len())?;

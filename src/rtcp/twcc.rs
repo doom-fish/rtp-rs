@@ -109,7 +109,7 @@ impl Twcc {
 
         // Pad to 32-bit boundary.
         let pad = (4 - body.len() % 4) % 4;
-        body.extend(std::iter::repeat(0u8).take(pad));
+        body.extend(std::iter::repeat_n(0u8, pad));
 
         let mut out = Vec::with_capacity(4 + body.len());
         write_header(&mut out, FMT, PT_RTPFB, body.len())?;

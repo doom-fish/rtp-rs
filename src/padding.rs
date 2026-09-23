@@ -39,7 +39,7 @@ pub fn append(buf: &mut Vec<u8>, count: usize) -> Result<()> {
     if count > 255 {
         return Err(Error::BadPadding(count));
     }
-    buf.extend(std::iter::repeat(0u8).take(count - 1));
+    buf.extend(std::iter::repeat_n(0u8, count - 1));
     buf.push(count as u8);
     Ok(())
 }
