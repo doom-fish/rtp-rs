@@ -51,7 +51,7 @@ use crate::padding;
 ///
 /// See the [module documentation](self) for the invariants each method must
 /// uphold.
-pub trait Packet {
+pub trait Packet: sealed::Sealed {
     /// The parsed RTP header.
     fn header(&self) -> &RtpHeader;
 
@@ -124,6 +124,12 @@ impl<'a> RtpPacket<'a> {
             payload_end: self.payload_end,
         }
     }
+}
+
+mod sealed {
+    pub trait Sealed {}
+    impl Sealed for super::RtpPacket<'_> {}
+    impl Sealed for super::RtpPacketOwned {}
 }
 
 impl Packet for RtpPacket<'_> {

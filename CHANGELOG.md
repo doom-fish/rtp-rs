@@ -53,6 +53,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same limit parsing applies), an APP subtype above 31, or a packet longer
   than the 16-bit length field. An SDES item of type 0 is rejected with
   `Error::BadPayload`.
+- **Breaking:** the `Packet` trait is sealed; only `RtpPacket` and
+  `RtpPacketOwned` implement it. Consumers such as SRTP derive the IV from
+  `header()` while encrypting `as_bytes()`, so a foreign implementation whose
+  header disagreed with its bytes could reuse a keystream.
 - `CompoundPacket::parse` checks that the first packet on the wire is an SR
   or RR, since unknown packets are now skipped.
 - `rust-version` is 1.82.
