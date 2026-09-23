@@ -46,6 +46,20 @@ pub enum Error {
     BadExtension(&'static str),
     /// A payload-format specific error (H.264 / Opus).
     BadPayload(&'static str),
+    #[allow(missing_docs)]
+    TooLarge {
+        what: &'static str,
+        max: usize,
+        actual: usize,
+    },
+}
+
+pub(crate) const fn ensure_at_most(what: &'static str, actual: usize, max: usize) -> Result<()> {
+    if actual > max {
+        Err(Error::TooLarge { what, max, actual })
+    } else {
+        Ok(())
+    }
 }
 
 impl fmt::Display for Error {
@@ -63,6 +77,9 @@ impl fmt::Display for Error {
             Self::Unsupported(what) => write!(f, "unsupported: {what}"),
             Self::BadExtension(why) => write!(f, "invalid header extension: {why}"),
             Self::BadPayload(why) => write!(f, "invalid payload: {why}"),
+            Self::TooLarge { what, max, actual } => {
+                write!(f, "{what} is {actual}, the limit is {max}")
+            }
         }
     }
 }

@@ -16,8 +16,8 @@ fn main() {
 
     let mut depacketizer = Depacketizer::new();
     let mut reassembled = None;
-    for frag in &fragments {
-        if let Some(nal) = depacketizer.push(frag).expect("valid FU-A") {
+    for (seq, frag) in (0u16..).zip(&fragments) {
+        if let Some(nal) = depacketizer.push(seq, frag).expect("valid FU-A") {
             reassembled = Some(nal);
         }
     }

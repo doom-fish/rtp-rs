@@ -38,7 +38,7 @@ fn aggregate_builds_stap_a() {
 
     // Reassemble.
     let mut depack = Depacketizer::new();
-    let first = depack.push(&agg).unwrap().unwrap();
+    let first = depack.push(1, &agg).unwrap().unwrap();
     let second = depack.pop().unwrap();
     assert_eq!(first, sps);
     assert_eq!(second, pps);

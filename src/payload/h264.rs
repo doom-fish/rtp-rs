@@ -10,7 +10,7 @@
 //! intentionally not implemented. NAL units are handled **without** Annex B
 //! start codes — a NAL unit here is the 1-byte NAL header followed by its RBSP.
 
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 use std::collections::VecDeque;
 
 /// Coded slice of a non-IDR picture.
@@ -182,11 +182,28 @@ impl Packetizer {
 }
 
 /// Reassembles RTP payloads back into NAL units.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Depacketizer {
     fragment: Vec<u8>,
     assembling: bool,
+    last_sequence: Option<u16>,
+    max_nal_size: usize,
     completed: VecDeque<Vec<u8>>,
+}
+
+#[allow(missing_docs)]
+pub const DEFAULT_MAX_NAL_SIZE: usize = 8 * 1024 * 1024;
+
+impl Default for Depacketizer {
+    fn default() -> Self {
+        Self {
+            fragment: Vec::new(),
+            assembling: false,
+            last_sequence: None,
+            max_nal_size: DEFAULT_MAX_NAL_SIZE,
+            completed: VecDeque::new(),
+        }
+    }
 }
 
 impl Depacketizer {
@@ -196,7 +213,17 @@ impl Depacketizer {
         Self::default()
     }
 
-    /// Feed one RTP payload. Returns the first completed NAL unit, if any.
+    #[allow(missing_docs)]
+    #[must_use]
+    pub fn with_max_nal_size(max_nal_size: usize) -> Self {
+        Self {
+            max_nal_size,
+            ..Self::default()
+        }
+    }
+
+    /// Feed one RTP payload together with the RTP sequence number of the
+    /// packet that carried it. Returns the first completed NAL unit, if any.
     ///
     /// A single payload may complete several NAL units (STAP-A); call [`pop`]
     /// repeatedly afterwards to drain the rest.
@@ -204,9 +231,20 @@ impl Depacketizer {
     /// [`pop`]: Self::pop
     ///
     /// # Errors
-    /// Returns [`Error::BadPayload`] for malformed STAP-A or FU-A payloads.
-    pub fn push(&mut self, payload: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.push_internal(payload)?;
+    /// Returns [`Error::BadPayload`] for malformed STAP-A or FU-A payloads and
+    /// for an FU-A fragment that does not directly follow the previous packet
+    /// of the same NAL unit, and [`Error::TooLarge`] when a reassembled NAL
+    /// unit would exceed the size limit. A partially reassembled NAL unit is
+    /// discarded on any error.
+    pub fn push(&mut self, sequence_number: u16, payload: &[u8]) -> Result<Option<Vec<u8>>> {
+        let follows = self
+            .last_sequence
+            .is_some_and(|last| sequence_number == last.wrapping_add(1));
+        self.last_sequence = Some(sequence_number);
+        if let Err(e) = self.push_internal(payload, follows) {
+            self.discard_fragment();
+            return Err(e);
+        }
         Ok(self.completed.pop_front())
     }
 
@@ -215,13 +253,22 @@ impl Depacketizer {
         self.completed.pop_front()
     }
 
-    fn push_internal(&mut self, payload: &[u8]) -> Result<()> {
+    fn discard_fragment(&mut self) {
+        self.assembling = false;
+        self.fragment.clear();
+    }
+
+    fn push_internal(&mut self, payload: &[u8], follows: bool) -> Result<()> {
         let first = *payload
             .first()
             .ok_or(Error::BadPayload("empty H.264 payload"))?;
-        match first & 0x1F {
+        let nal_type = first & 0x1F;
+        if nal_type != NAL_FU_A {
+            self.discard_fragment();
+        }
+        match nal_type {
             NAL_STAP_A => self.depacketize_stap_a(payload),
-            NAL_FU_A => self.depacketize_fu_a(payload),
+            NAL_FU_A => self.depacketize_fu_a(payload, follows),
             1..=23 => {
                 self.completed.push_back(payload.to_vec());
                 Ok(())
@@ -251,7 +298,7 @@ impl Depacketizer {
         Ok(())
     }
 
-    fn depacketize_fu_a(&mut self, payload: &[u8]) -> Result<()> {
+    fn depacketize_fu_a(&mut self, payload: &[u8], follows: bool) -> Result<()> {
         if payload.len() < 3 {
             return Err(Error::BadPayload("truncated FU-A payload"));
         }
@@ -267,8 +314,18 @@ impl Depacketizer {
             self.assembling = true;
         } else if !self.assembling {
             return Err(Error::BadPayload("FU-A continuation without start"));
+        } else if !follows {
+            return Err(Error::BadPayload("FU-A fragment missing (sequence gap)"));
+        } else if self.fragment.first().map(|h| h & 0x1F) != Some(nal_unit_type) {
+            return Err(Error::BadPayload("FU-A fragment of a different NAL unit"));
         }
-        self.fragment.extend_from_slice(&payload[2..]);
+        let body = &payload[2..];
+        ensure_at_most(
+            "reassembled FU-A NAL unit size",
+            self.fragment.len() + body.len(),
+            self.max_nal_size,
+        )?;
+        self.fragment.extend_from_slice(body);
         if end {
             self.assembling = false;
             self.completed.push_back(std::mem::take(&mut self.fragment));
