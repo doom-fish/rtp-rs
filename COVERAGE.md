@@ -52,18 +52,33 @@ Packetization mode 1 only; interleaved mode (2) is out of scope.
 - **H.264**: STAP-B, MTAP16, MTAP24, FU-B and packetization mode 0/2.
 - **RTCP APP**: the application-defined body is carried as opaque bytes; no
   per-application schema is interpreted.
-- **RTCP XR** (RFC 3611) and reduced-size RTCP (RFC 5506) are not implemented;
-  `CompoundPacket::parse_lenient` exists so callers can inspect reduced-size
-  streams, but the SR/RR-first rule is otherwise enforced.
+- **RTCP XR** (RFC 3611) and reduced-size RTCP (RFC 5506) are not implemented.
+  Packet types this crate does not model (XR, TMMBR/TMMBN, application-layer
+  feedback other than REMB, unknown RTPFB/PSFB formats) are skipped when a
+  compound packet is parsed. `CompoundPacket::parse_lenient` exists so callers
+  can inspect reduced-size streams; `CompoundPacket::parse` still requires the
+  first packet on the wire to be an SR or RR.
 - **SDES**: CNAME and the standard item types are encoded/parsed; PRIV items
   are carried but not specially interpreted.
 
+## Limits on untrusted input
+
+| Input | Limit |
+|-------|-------|
+| FU-A reassembly | `h264::DEFAULT_MAX_NAL_SIZE` (8 MiB), configurable; fragments must have consecutive sequence numbers and the same NAL type |
+| TWCC status count | `rtcp::twcc::MAX_STATUSES` (32 768) |
+| REMB bitrate | rejected when `mantissa << exp` overflows 64 bits |
+| RTCP padding | honoured; a zero or oversized padding count is rejected |
+| Encoders | counts and lengths that do not fit their wire field return `Error::TooLarge` |
+
 ## Validation
 
-- 37 integration tests plus a crate doctest cover header, extension, RTCP
+- 68 integration tests plus a crate doctest cover header, extension, RTCP
   (SR/RR/NACK/PLI/FIR/SLI/REMB/TWCC), H.264 packetize/depacketize, Opus TOC,
-  sequence-number wrap and jitter round-trips.
-- `cargo clippy --all-targets -- -D warnings` is clean with `pedantic` and
-  `nursery` lint groups enabled (intentional wire-codec casts are allowed
+  sequence-number wrap and jitter round-trips, and malformed input: unknown
+  and padded RTCP packets, TWCC expansion, REMB overflow, unterminated or
+  interrupted FU-A sequences, and oversize encoder input.
+- `cargo clippy --all-targets --all-features -- -D warnings` is clean with
+  `pedantic` and `nursery` lint groups enabled (intentional wire-codec casts are allowed
   crate-wide; see `src/lib.rs`).
 - `cargo doc` builds with no warnings.

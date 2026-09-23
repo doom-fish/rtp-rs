@@ -9,9 +9,12 @@ crates build on. It does all of its work over plain byte slices: there is no
 `bytes`, `byteorder`, `nom` or any other dependency — just `std` and integer
 `from_be_bytes` / `to_be_bytes`.
 
+The crate is not published to crates.io (`publish = false`); depend on it by
+path from a sibling checkout:
+
 ```toml
 [dependencies]
-rtp = { package = "rtp-rs", version = "0.1" }
+rtp = { package = "rtp-rs", path = "../rtp-rs", version = "0.1" }
 ```
 
 ## Features
@@ -41,7 +44,7 @@ let bytes = RtpPacket::builder()
     .extension(Extension::mid("0"))
     .extension(Extension::twcc(42))
     .payload([0x67, 0x42, 0x00, 0x1f])
-    .build()
+    .build()?
     .into_bytes();
 
 let pkt = RtpPacket::parse(&bytes).unwrap();
@@ -58,8 +61,8 @@ let packetizer = Packetizer::new(1200);     // payload MTU in bytes
 let payloads = packetizer.packetize(&nal);  // Single NAL or FU-A fragments
 
 let mut depacketizer = Depacketizer::new();
-for p in &payloads {
-    if let Some(nal) = depacketizer.push(p)? {
+for (seq, p) in (first_seq..).zip(&payloads) {
+    if let Some(nal) = depacketizer.push(seq, p)? {
         // complete NAL unit reassembled
     }
 }
@@ -78,8 +81,22 @@ let compound = CompoundPacket::new()
     .add(rr)
     .add(nack.into())
     .add(pli.into());
-let bytes = compound.encode();
+let bytes = compound.encode()?;
 ```
+
+`CompoundPacket::parse` skips RTCP packet types it does not model (XR, TMMBR,
+non-REMB application feedback) instead of rejecting the datagram, and honours
+the RTCP padding bit.
+
+## Limits on untrusted input
+
+- FU-A reassembly stops at `h264::DEFAULT_MAX_NAL_SIZE` (8 MiB, configurable
+  with `Depacketizer::with_max_nal_size`) and requires consecutive RTP
+  sequence numbers; a gap discards the partial NAL unit.
+- TWCC feedback announcing more than `rtcp::twcc::MAX_STATUSES` (32 768)
+  statuses is rejected.
+- Encoders return `Error::TooLarge` for any count or length that does not fit
+  its wire field; nothing is silently truncated.
 
 ## The borrowing contract
 
