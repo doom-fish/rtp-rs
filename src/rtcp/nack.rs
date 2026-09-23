@@ -73,18 +73,21 @@ impl Nack {
     }
 
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] when the entries do not fit the RTCP length
+    /// field.
+    pub fn encode(&self) -> Result<Vec<u8>> {
         let body_len = 8 + self.entries.len() * 4;
         let mut out = Vec::with_capacity(4 + body_len);
-        write_header(&mut out, FMT, PT_RTPFB, body_len);
+        write_header(&mut out, FMT, PT_RTPFB, body_len)?;
         out.extend_from_slice(&self.sender_ssrc.to_be_bytes());
         out.extend_from_slice(&self.media_ssrc.to_be_bytes());
         for e in &self.entries {
             out.extend_from_slice(&e.pid.to_be_bytes());
             out.extend_from_slice(&e.blp.to_be_bytes());
         }
-        out
+        Ok(out)
     }
 
     /// Parse a NACK packet from its bytes.

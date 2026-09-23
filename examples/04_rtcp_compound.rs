@@ -27,7 +27,7 @@ fn main() {
         .add(nack.into())
         .add(pli.into());
 
-    let bytes = compound.encode();
+    let bytes = compound.encode().expect("encodable compound packet");
     println!("compound packet: {} bytes", bytes.len());
 
     let parsed = CompoundPacket::parse(&bytes).expect("valid compound");

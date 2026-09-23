@@ -1,7 +1,7 @@
 //! Source Description (PT 202).
 
 use super::{be_u32, write_header, Header, PT_SDES};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// SDES item type: canonical end-point identifier (CNAME).
 pub const ITEM_CNAME: u8 = 1;
@@ -58,18 +58,25 @@ pub struct Sdes {
 
 impl Sdes {
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let count = self.chunks.len().min(31) as u8;
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 31 chunks or an item longer
+    /// than 255 bytes, and [`Error::BadPayload`] for an item of type 0, which
+    /// would terminate its chunk on the wire.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most("RTCP SDES chunk count", self.chunks.len(), 31)?;
         let mut body = Vec::new();
-        for chunk in self.chunks.iter().take(31) {
+        for chunk in &self.chunks {
             let start = body.len();
             body.extend_from_slice(&chunk.source.to_be_bytes());
             for item in &chunk.items {
+                if item.item_type == 0 {
+                    return Err(Error::BadPayload("SDES item type 0 is reserved for END"));
+                }
+                ensure_at_most("RTCP SDES item length", item.text.len(), 255)?;
                 body.push(item.item_type);
-                let len = item.text.len().min(255) as u8;
-                body.push(len);
-                body.extend_from_slice(&item.text[..len as usize]);
+                body.push(item.text.len() as u8);
+                body.extend_from_slice(&item.text);
             }
             // Terminating END (0) item, then pad chunk to a 32-bit boundary.
             body.push(0);
@@ -78,9 +85,9 @@ impl Sdes {
             body.extend(std::iter::repeat(0u8).take(pad));
         }
         let mut out = Vec::with_capacity(4 + body.len());
-        write_header(&mut out, count, PT_SDES, body.len());
+        write_header(&mut out, self.chunks.len() as u8, PT_SDES, body.len())?;
         out.extend_from_slice(&body);
-        out
+        Ok(out)
     }
 
     /// Parse a Source Description packet from its bytes.

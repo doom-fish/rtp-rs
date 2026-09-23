@@ -6,7 +6,7 @@
 //! (`mantissa << exp` bits per second), then the list of constrained SSRCs.
 
 use super::{be_u32, write_header, Header, PT_PSFB};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// PSFB feedback message type for REMB.
 pub const FMT: u8 = 15;
@@ -41,12 +41,15 @@ impl Remb {
     }
 
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let num = self.ssrcs.len().min(255) as u8;
-        let body_len = 8 + 8 + num as usize * 4;
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 255 SSRCs.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most("REMB SSRC count", self.ssrcs.len(), 255)?;
+        let num = self.ssrcs.len() as u8;
+        let body_len = 8 + 8 + self.ssrcs.len() * 4;
         let mut out = Vec::with_capacity(4 + body_len);
-        write_header(&mut out, FMT, PT_PSFB, body_len);
+        write_header(&mut out, FMT, PT_PSFB, body_len)?;
         out.extend_from_slice(&self.sender_ssrc.to_be_bytes());
         out.extend_from_slice(&self.media_ssrc.to_be_bytes());
         out.extend_from_slice(&IDENTIFIER);
@@ -55,10 +58,10 @@ impl Remb {
         out.push((exp << 2) | ((mantissa >> 16) & 0x03) as u8);
         out.push((mantissa >> 8) as u8);
         out.push(mantissa as u8);
-        for s in self.ssrcs.iter().take(255) {
+        for s in &self.ssrcs {
             out.extend_from_slice(&s.to_be_bytes());
         }
-        out
+        Ok(out)
     }
 
     /// Parse a REMB packet from its bytes.

@@ -14,7 +14,8 @@ fn main() {
         .extension(Extension::mid("0"))
         .extension(Extension::twcc(42))
         .payload(nal.as_slice())
-        .build();
+        .build()
+        .expect("valid packet");
 
     let bytes = packet.into_bytes();
     println!("encoded {} bytes: {:02X?}", bytes.len(), bytes);

@@ -58,13 +58,15 @@ impl CompoundPacket {
     }
 
     /// Serialize the compound packet.
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// Propagates the first [`RtcpPacket::encode`] error.
+    pub fn encode(&self) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         for p in &self.packets {
-            out.extend_from_slice(&p.encode());
+            out.extend_from_slice(&p.encode()?);
         }
-        out
+        Ok(out)
     }
 
     /// Parse and validate a compound packet from a datagram.

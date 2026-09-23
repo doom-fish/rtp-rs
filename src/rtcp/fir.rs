@@ -31,11 +31,14 @@ pub struct Fir {
 
 impl Fir {
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] when the entries do not fit the RTCP length
+    /// field.
+    pub fn encode(&self) -> Result<Vec<u8>> {
         let body_len = 8 + self.entries.len() * 8;
         let mut out = Vec::with_capacity(4 + body_len);
-        write_header(&mut out, FMT, PT_PSFB, body_len);
+        write_header(&mut out, FMT, PT_PSFB, body_len)?;
         out.extend_from_slice(&self.sender_ssrc.to_be_bytes());
         out.extend_from_slice(&self.media_ssrc.to_be_bytes());
         for e in &self.entries {
@@ -43,7 +46,7 @@ impl Fir {
             out.push(e.seq_nr);
             out.extend_from_slice(&[0u8, 0, 0]);
         }
-        out
+        Ok(out)
     }
 
     /// Parse a FIR packet from its bytes.

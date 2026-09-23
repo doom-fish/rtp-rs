@@ -4,7 +4,7 @@
 //! application data blob (which must be 32-bit aligned on the wire).
 
 use super::{be_u32, write_header, Header, PT_APP};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// An application-defined RTCP packet.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -21,8 +21,12 @@ pub struct App {
 
 impl App {
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for a subtype above 31 or a packet longer
+    /// than the RTCP length field can describe.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most("RTCP APP subtype", usize::from(self.subtype), 31)?;
         let mut body = Vec::with_capacity(8 + self.data.len());
         body.extend_from_slice(&self.ssrc.to_be_bytes());
         body.extend_from_slice(&self.name);
@@ -30,9 +34,9 @@ impl App {
         let pad = (4 - body.len() % 4) % 4;
         body.extend(std::iter::repeat(0u8).take(pad));
         let mut out = Vec::with_capacity(4 + body.len());
-        write_header(&mut out, self.subtype & 0x1F, PT_APP, body.len());
+        write_header(&mut out, self.subtype, PT_APP, body.len())?;
         out.extend_from_slice(&body);
-        out
+        Ok(out)
     }
 
     /// Parse an application-defined packet from its bytes.

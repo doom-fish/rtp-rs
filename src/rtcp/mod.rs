@@ -30,7 +30,7 @@ pub mod sli;
 pub mod sr;
 pub mod twcc;
 
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// Sender Report.
 pub const PT_SR: u8 = 200;
@@ -132,8 +132,11 @@ impl RtcpPacket {
     }
 
     /// Serialize this single RTCP packet (with its own header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] when a count or length does not fit its wire
+    /// field, instead of truncating it.
+    pub fn encode(&self) -> Result<Vec<u8>> {
         match self {
             Self::SenderReport(p) => p.encode(),
             Self::ReceiverReport(p) => p.encode(),
@@ -260,13 +263,18 @@ impl Header {
 
 /// Write an RTCP common header into `out` for a packet whose body is
 /// `body_len` bytes (must be 32-bit aligned). `count` is the RC/FMT nibble.
-pub(crate) fn write_header(out: &mut Vec<u8>, count: u8, pt: u8, body_len: usize) {
+pub(crate) fn write_header(out: &mut Vec<u8>, count: u8, pt: u8, body_len: usize) -> Result<()> {
     debug_assert!(body_len % 4 == 0, "RTCP body must be 32-bit aligned");
-    let total_len = 4 + body_len;
-    let words = (total_len / 4 - 1) as u16;
+    let words = body_len / 4;
+    ensure_at_most(
+        "RTCP packet length in 32-bit words",
+        words,
+        usize::from(u16::MAX),
+    )?;
     out.push((2 << 6) | (count & 0x1F));
     out.push(pt);
-    out.extend_from_slice(&words.to_be_bytes());
+    out.extend_from_slice(&(words as u16).to_be_bytes());
+    Ok(())
 }
 
 /// Read a big-endian u32 at `off`, assuming bounds were validated by the header.

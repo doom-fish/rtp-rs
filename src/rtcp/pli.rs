@@ -19,13 +19,15 @@ pub struct Pli {
 
 impl Pli {
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// A PLI has a fixed-size body, so this never returns an error.
+    pub fn encode(&self) -> Result<Vec<u8>> {
         let mut out = Vec::with_capacity(12);
-        write_header(&mut out, FMT, PT_PSFB, 8);
+        write_header(&mut out, FMT, PT_PSFB, 8)?;
         out.extend_from_slice(&self.sender_ssrc.to_be_bytes());
         out.extend_from_slice(&self.media_ssrc.to_be_bytes());
-        out
+        Ok(out)
     }
 
     /// Parse a PLI packet from its bytes.

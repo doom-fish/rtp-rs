@@ -6,7 +6,7 @@
 //! **length is measured in 32-bit words and excludes the 4-byte header**
 //! (RFC 3550 §5.3.1) — a common source of off-by-four bugs.
 
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// Length of the fixed RTP header, before any CSRCs or extension.
 pub const FIXED_HEADER_LEN: usize = 12;
@@ -239,12 +239,24 @@ impl RtpHeader {
     /// The padding (P) bit reflects the header's padding flag; the caller is
     /// responsible for actually appending the padding bytes to the payload.
     ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 15 CSRCs or an extension
+    /// block longer than 65 535 32-bit words; nothing is written to `out`.
+    ///
     /// # Panics
     /// Panics in debug builds if the stored extension data is not 32-bit
     /// aligned; the builder guarantees alignment.
-    pub fn write(&self, out: &mut Vec<u8>) {
-        let cc = self.csrc.len().min(15) as u8;
-        let mut b0 = (2u8 << 6) | (cc & 0x0F);
+    pub fn write(&self, out: &mut Vec<u8>) -> Result<()> {
+        ensure_at_most("CSRC count", self.csrc.len(), 15)?;
+        if self.extension {
+            ensure_at_most(
+                "header extension length in 32-bit words",
+                self.ext_data.len() / 4,
+                usize::from(u16::MAX),
+            )?;
+        }
+        let cc = self.csrc.len() as u8;
+        let mut b0 = (2u8 << 6) | cc;
         if self.padding {
             b0 |= 0x20;
         }
@@ -262,7 +274,7 @@ impl RtpHeader {
         out.extend_from_slice(&self.sequence_number.to_be_bytes());
         out.extend_from_slice(&self.timestamp.to_be_bytes());
         out.extend_from_slice(&self.ssrc.to_be_bytes());
-        for c in self.csrc.iter().take(15) {
+        for c in &self.csrc {
             out.extend_from_slice(&c.to_be_bytes());
         }
         if self.extension {
@@ -275,5 +287,6 @@ impl RtpHeader {
             out.extend_from_slice(&words.to_be_bytes());
             out.extend_from_slice(&self.ext_data);
         }
+        Ok(())
     }
 }

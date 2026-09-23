@@ -8,7 +8,7 @@ use rtp::rtcp::twcc::{Delta, Twcc};
 use rtp::RtcpPacket;
 
 fn round_trip(pkt: &RtcpPacket) -> RtcpPacket {
-    let bytes = pkt.encode();
+    let bytes = pkt.encode().unwrap();
     assert_eq!(bytes.len() % 4, 0, "RTCP packets are 32-bit aligned");
     RtcpPacket::parse(&bytes).unwrap()
 }

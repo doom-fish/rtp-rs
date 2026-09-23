@@ -41,7 +41,8 @@ fn extensions_survive_full_packet_round_trip() {
         .extension(Extension::mid("video"))
         .extension(Extension::abs_send_time(0x00AB_CDEF))
         .payload([0u8; 3])
-        .build();
+        .build()
+        .unwrap();
 
     let bytes = pkt.into_bytes();
     let parsed = RtpPacket::parse(&bytes).unwrap();

@@ -60,8 +60,16 @@ pub struct Twcc {
 
 impl Twcc {
     /// Serialize this packet (with header), including 32-bit padding.
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 65 535 statuses or a packet
+    /// longer than the RTCP length field can describe.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most(
+            "TWCC packet status count",
+            self.statuses.len(),
+            usize::from(u16::MAX),
+        )?;
         let mut body = Vec::new();
         body.extend_from_slice(&self.sender_ssrc.to_be_bytes());
         body.extend_from_slice(&self.media_ssrc.to_be_bytes());
@@ -104,9 +112,9 @@ impl Twcc {
         body.extend(std::iter::repeat(0u8).take(pad));
 
         let mut out = Vec::with_capacity(4 + body.len());
-        write_header(&mut out, FMT, PT_RTPFB, body.len());
+        write_header(&mut out, FMT, PT_RTPFB, body.len())?;
         out.extend_from_slice(&body);
-        out
+        Ok(out)
     }
 
     /// Parse a TWCC packet from its bytes.

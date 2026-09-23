@@ -10,7 +10,8 @@ fn minimal_header_round_trip() {
         .timestamp(0xDEAD_BEEF)
         .ssrc(0x1234_5678)
         .payload([1, 2, 3, 4])
-        .build();
+        .build()
+        .unwrap();
 
     let bytes = pkt.into_bytes();
     let parsed = RtpPacket::parse(&bytes).unwrap();
@@ -36,7 +37,8 @@ fn marker_and_csrc_round_trip() {
         .csrc(0x1111_1111)
         .csrc(0x2222_2222)
         .payload([0xFF])
-        .build();
+        .build()
+        .unwrap();
 
     let bytes = pkt.into_bytes();
     let parsed = RtpPacket::parse(&bytes).unwrap();
@@ -57,7 +59,8 @@ fn padding_is_stripped_from_payload() {
         .ssrc(7)
         .payload([0xAB, 0xCD])
         .pad_to(8)
-        .build();
+        .build()
+        .unwrap();
 
     let bytes = pkt.into_bytes();
     // 12 header + payload(2) padded up to a multiple of 8 => 16 bytes on the wire.

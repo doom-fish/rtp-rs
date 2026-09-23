@@ -1,7 +1,7 @@
 //! Receiver Report (PT 201) and the reception report block shared with SR.
 
 use super::{be_u32, write_header, Header, PT_RR};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// A single reception report block (24 bytes), used by both RR and SR.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -68,17 +68,19 @@ impl ReceiverReport {
     }
 
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let count = self.reports.len().min(31) as u8;
-        let body_len = 4 + count as usize * ReportBlock::LEN;
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 31 report blocks.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most("RTCP receiver report block count", self.reports.len(), 31)?;
+        let body_len = 4 + self.reports.len() * ReportBlock::LEN;
         let mut out = Vec::with_capacity(4 + body_len);
-        write_header(&mut out, count, PT_RR, body_len);
+        write_header(&mut out, self.reports.len() as u8, PT_RR, body_len)?;
         out.extend_from_slice(&self.ssrc.to_be_bytes());
-        for b in self.reports.iter().take(31) {
+        for b in &self.reports {
             b.write(&mut out);
         }
-        out
+        Ok(out)
     }
 
     /// Parse a Receiver Report from its bytes.

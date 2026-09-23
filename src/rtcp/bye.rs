@@ -1,7 +1,7 @@
 //! Goodbye (PT 203).
 
 use super::{be_u32, write_header, Header, PT_BYE};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// A BYE packet: a list of leaving sources and an optional reason string.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -23,24 +23,27 @@ impl Bye {
     }
 
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let count = self.sources.len().min(31) as u8;
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 31 sources or a reason longer
+    /// than 255 bytes.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most("RTCP BYE source count", self.sources.len(), 31)?;
         let mut body = Vec::new();
-        for s in self.sources.iter().take(31) {
+        for s in &self.sources {
             body.extend_from_slice(&s.to_be_bytes());
         }
         if let Some(reason) = &self.reason {
-            let len = reason.len().min(255) as u8;
-            body.push(len);
-            body.extend_from_slice(&reason[..len as usize]);
+            ensure_at_most("RTCP BYE reason length", reason.len(), 255)?;
+            body.push(reason.len() as u8);
+            body.extend_from_slice(reason);
             let pad = (4 - body.len() % 4) % 4;
             body.extend(std::iter::repeat(0u8).take(pad));
         }
         let mut out = Vec::with_capacity(4 + body.len());
-        write_header(&mut out, count, PT_BYE, body.len());
+        write_header(&mut out, self.sources.len() as u8, PT_BYE, body.len())?;
         out.extend_from_slice(&body);
-        out
+        Ok(out)
     }
 
     /// Parse a BYE packet from its bytes.

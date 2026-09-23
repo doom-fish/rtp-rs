@@ -28,7 +28,7 @@
 //!     .ssrc(0x1234_5678)
 //!     .extension(Extension::mid("0"))
 //!     .payload([0x67, 0x42, 0x00, 0x1f])
-//!     .build()
+//!     .build()?
 //!     .into_bytes();
 //!
 //! // Parse it back.
@@ -36,6 +36,7 @@
 //! assert_eq!(pkt.header().payload_type(), 96);
 //! assert_eq!(pkt.header().sequence_number(), 1000);
 //! assert_eq!(pkt.payload(), &[0x67, 0x42, 0x00, 0x1f]);
+//! # Ok::<(), rtp::Error>(())
 //! ```
 #![warn(missing_docs)]
 #![allow(

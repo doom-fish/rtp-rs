@@ -42,7 +42,7 @@
 //! is why [`RtpPacketMut`] keeps a single backing `&mut [u8]` and exposes the
 //! header by *parsed value* but the bytes by *borrowed slice*.
 
-use crate::error::Result;
+use crate::error::{ensure_at_most, Result};
 use crate::extension::{self, Extension};
 use crate::header::RtpHeader;
 use crate::padding;
@@ -328,9 +328,7 @@ impl RtpPacketBuilder {
     /// Append a contributing source.
     #[must_use]
     pub fn csrc(mut self, csrc: u32) -> Self {
-        if self.header.csrc.len() < 15 {
-            self.header.csrc.push(csrc);
-        }
+        self.header.csrc.push(csrc);
         self
     }
 
@@ -358,15 +356,16 @@ impl RtpPacketBuilder {
 
     /// Build the owned packet.
     ///
-    /// # Panics
-    /// Panics if a supplied extension cannot be encoded (out-of-range element
-    /// ID or length). Use [`extension::encode`] directly if you need to handle
-    /// that error.
-    #[must_use]
-    pub fn build(mut self) -> RtpPacketOwned {
+    /// # Errors
+    /// Returns the [`extension::encode`] error for an extension that cannot be
+    /// encoded (out-of-range element ID or length), and
+    /// [`crate::Error::TooLarge`] for more than 15 CSRCs, an extension block
+    /// longer than 65 535 32-bit words, or a [`pad_to`](Self::pad_to)
+    /// alignment above 256 bytes (the padding count is a single byte).
+    pub fn build(mut self) -> Result<RtpPacketOwned> {
+        ensure_at_most("padding alignment", self.pad_to, 256)?;
         if !self.extensions.is_empty() {
-            let (profile, mut data) =
-                extension::encode(&self.extensions).expect("valid header extensions");
+            let (profile, mut data) = extension::encode(&self.extensions)?;
             // Pad the extension block to a 32-bit word boundary.
             let pad = padding::pad_to(data.len(), 4);
             data.extend(std::iter::repeat(0u8).take(pad));
@@ -393,17 +392,15 @@ impl RtpPacketBuilder {
         self.header.padding = pad_count > 0;
 
         let mut bytes = Vec::with_capacity(payload_end + pad_count);
-        self.header.write(&mut bytes);
+        self.header.write(&mut bytes)?;
         bytes.extend_from_slice(&self.payload);
-        if pad_count > 0 {
-            padding::append(&mut bytes, pad_count).expect("pad count <= 255");
-        }
+        padding::append(&mut bytes, pad_count)?;
 
-        RtpPacketOwned {
+        Ok(RtpPacketOwned {
             bytes,
             header: self.header,
             payload_off,
             payload_end,
-        }
+        })
     }
 }

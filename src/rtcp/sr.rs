@@ -2,7 +2,7 @@
 
 use super::rr::ReportBlock;
 use super::{be_u32, write_header, Header, PT_SR};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// A Sender Report: sender info block plus zero or more reception reports.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -40,21 +40,23 @@ impl SenderReport {
     }
 
     /// Serialize this packet (with header).
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let count = self.reports.len().min(31) as u8;
-        let body_len = 24 + count as usize * ReportBlock::LEN;
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for more than 31 report blocks.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        ensure_at_most("RTCP sender report block count", self.reports.len(), 31)?;
+        let body_len = 24 + self.reports.len() * ReportBlock::LEN;
         let mut out = Vec::with_capacity(4 + body_len);
-        write_header(&mut out, count, PT_SR, body_len);
+        write_header(&mut out, self.reports.len() as u8, PT_SR, body_len)?;
         out.extend_from_slice(&self.ssrc.to_be_bytes());
         out.extend_from_slice(&self.ntp_timestamp.to_be_bytes());
         out.extend_from_slice(&self.rtp_timestamp.to_be_bytes());
         out.extend_from_slice(&self.packet_count.to_be_bytes());
         out.extend_from_slice(&self.octet_count.to_be_bytes());
-        for b in self.reports.iter().take(31) {
+        for b in &self.reports {
             b.write(&mut out);
         }
-        out
+        Ok(out)
     }
 
     /// Parse a Sender Report from its bytes.
