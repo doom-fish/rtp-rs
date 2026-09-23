@@ -4,7 +4,7 @@
 //! (6 bits).
 
 use super::{be_u32, write_header, Header, PT_PSFB};
-use crate::error::{Error, Result};
+use crate::error::{ensure_at_most, Error, Result};
 
 /// PSFB feedback message type for SLI.
 pub const FMT: u8 = 2;
@@ -35,9 +35,15 @@ impl Sli {
     /// Serialize this packet (with header).
     ///
     /// # Errors
-    /// Returns [`Error::TooLarge`] when the entries do not fit the RTCP length
-    /// field.
+    /// Returns [`Error::TooLarge`] when an entry's `first` or `number` exceeds
+    /// 13 bits or its `picture_id` 6 bits, or the entries do not fit the RTCP
+    /// length field.
     pub fn encode(&self) -> Result<Vec<u8>> {
+        for e in &self.entries {
+            ensure_at_most("SLI first macroblock", usize::from(e.first), 0x1FFF)?;
+            ensure_at_most("SLI macroblock count", usize::from(e.number), 0x1FFF)?;
+            ensure_at_most("SLI picture ID", usize::from(e.picture_id), 0x3F)?;
+        }
         let body_len = 8 + self.entries.len() * 4;
         let mut out = Vec::with_capacity(4 + body_len);
         write_header(&mut out, FMT, PT_PSFB, body_len)?;

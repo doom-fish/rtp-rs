@@ -31,6 +31,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `SourceState::fraction_lost` saturates at 255; 100 % loss was reported as 0.
 - `SourceState` counters wrap instead of panicking in debug builds after 2³²
   packets.
+- `ReceptionStats::to_report_block` clamps the cumulative loss to 0x7FFFFF as
+  RFC 3550 A.3 requires; masking it to 24 bits reported more than 2²³ lost
+  packets as a negative count.
 - `Nack::from_lost` packs losses across the 65535 → 0 wrap into shared
   PID/BLP entries.
 - `RtpPacketBuilder::build` no longer panics on an invalid extension or a
@@ -53,6 +56,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same limit parsing applies), an APP subtype above 31, or a packet longer
   than the 16-bit length field. An SDES item of type 0 is rejected with
   `Error::BadPayload`.
+- **Breaking:** out-of-range values are rejected instead of silently masked.
+  `RtpHeader::set_payload_type` returns `Result`, and `RtpHeader::write` and
+  `RtpPacketBuilder::build` (whose `payload_type` no longer masks) fail for a
+  payload type above 127. `Sli::encode` fails for a `first` or `number` above
+  8191 or a `picture_id` above 63. RR and SR `encode` fail for a
+  `cumulative_lost` wider than 24 bits.
 - **Breaking:** the `Packet` trait is sealed; only `RtpPacket` and
   `RtpPacketOwned` implement it. Consumers such as SRTP derive the IV from
   `header()` while encrypting `as_bytes()`, so a foreign implementation whose

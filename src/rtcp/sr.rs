@@ -42,7 +42,8 @@ impl SenderReport {
     /// Serialize this packet (with header).
     ///
     /// # Errors
-    /// Returns [`Error::TooLarge`] for more than 31 report blocks.
+    /// Returns [`Error::TooLarge`] for more than 31 report blocks or a
+    /// `cumulative_lost` wider than 24 bits.
     pub fn encode(&self) -> Result<Vec<u8>> {
         ensure_at_most("RTCP sender report block count", self.reports.len(), 31)?;
         let body_len = 24 + self.reports.len() * ReportBlock::LEN;
@@ -54,7 +55,7 @@ impl SenderReport {
         out.extend_from_slice(&self.packet_count.to_be_bytes());
         out.extend_from_slice(&self.octet_count.to_be_bytes());
         for b in &self.reports {
-            b.write(&mut out);
+            b.write(&mut out)?;
         }
         Ok(out)
     }

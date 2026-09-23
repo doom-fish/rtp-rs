@@ -112,9 +112,15 @@ impl RtpHeader {
         self.marker = marker;
     }
 
-    /// Set the payload type (low 7 bits used).
-    pub fn set_payload_type(&mut self, pt: u8) {
-        self.payload_type = pt & 0x7F;
+    /// Set the payload type.
+    ///
+    /// # Errors
+    /// Returns [`Error::TooLarge`] for a payload type above 127; the header is
+    /// left unchanged.
+    pub fn set_payload_type(&mut self, pt: u8) -> Result<()> {
+        ensure_at_most("RTP payload type", usize::from(pt), 127)?;
+        self.payload_type = pt;
+        Ok(())
     }
 
     /// Set the sequence number.
@@ -240,13 +246,15 @@ impl RtpHeader {
     /// responsible for actually appending the padding bytes to the payload.
     ///
     /// # Errors
-    /// Returns [`Error::TooLarge`] for more than 15 CSRCs or an extension
-    /// block longer than 65 535 32-bit words; nothing is written to `out`.
+    /// Returns [`Error::TooLarge`] for a payload type above 127, more than 15
+    /// CSRCs or an extension block longer than 65 535 32-bit words; nothing is
+    /// written to `out`.
     ///
     /// # Panics
     /// Panics in debug builds if the stored extension data is not 32-bit
     /// aligned; the builder guarantees alignment.
     pub fn write(&self, out: &mut Vec<u8>) -> Result<()> {
+        ensure_at_most("RTP payload type", usize::from(self.payload_type), 127)?;
         ensure_at_most("CSRC count", self.csrc.len(), 15)?;
         if self.extension {
             ensure_at_most(

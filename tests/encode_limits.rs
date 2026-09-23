@@ -4,6 +4,7 @@ use rtp::rtcp::nack::{Nack, NackEntry};
 use rtp::rtcp::remb::Remb;
 use rtp::rtcp::rr::{ReceiverReport, ReportBlock};
 use rtp::rtcp::sdes::{Sdes, SdesChunk, SdesItem};
+use rtp::rtcp::sli::{Sli, SliEntry};
 use rtp::rtcp::sr::SenderReport;
 use rtp::rtcp::twcc::{Delta, Twcc, MAX_STATUSES};
 use rtp::{CompoundPacket, Error, Extension, Packet, RtcpPacket, RtpPacket};
@@ -236,4 +237,86 @@ fn rtp_builder_rejects_oversized_extension_blocks() {
             ..
         })
     ));
+}
+
+#[test]
+fn payload_type_above_127_is_rejected() {
+    assert_eq!(
+        RtpPacket::builder().payload_type(128).build(),
+        Err(too_large("RTP payload type", 127, 128))
+    );
+    let packet = RtpPacket::builder().payload_type(127).build().unwrap();
+    assert_eq!(packet.header().payload_type(), 127);
+
+    let mut header = packet.header().clone();
+    assert_eq!(
+        header.set_payload_type(200),
+        Err(too_large("RTP payload type", 127, 200))
+    );
+    assert_eq!(header.payload_type(), 127);
+    assert_eq!(header.set_payload_type(96), Ok(()));
+    assert_eq!(header.payload_type(), 96);
+}
+
+#[test]
+fn sli_fields_must_fit_their_bit_widths() {
+    let sli = |first, number, picture_id| Sli {
+        sender_ssrc: 1,
+        media_ssrc: 2,
+        entries: vec![SliEntry {
+            first,
+            number,
+            picture_id,
+        }],
+    };
+    assert_eq!(
+        sli(0x2000, 1, 1).encode(),
+        Err(too_large("SLI first macroblock", 0x1FFF, 0x2000))
+    );
+    assert_eq!(
+        sli(1, 0x2000, 1).encode(),
+        Err(too_large("SLI macroblock count", 0x1FFF, 0x2000))
+    );
+    assert_eq!(
+        sli(1, 1, 64).encode(),
+        Err(too_large("SLI picture ID", 0x3F, 64))
+    );
+    let max = sli(0x1FFF, 0x1FFF, 0x3F);
+    assert_eq!(
+        RtcpPacket::parse(&max.encode().unwrap()).unwrap(),
+        RtcpPacket::Sli(max)
+    );
+}
+
+#[test]
+fn cumulative_lost_must_fit_24_bits() {
+    let block = |cumulative_lost| ReportBlock {
+        cumulative_lost,
+        ..ReportBlock::default()
+    };
+    let rr = ReceiverReport {
+        ssrc: 1,
+        reports: vec![block(0x0100_0000)],
+    };
+    assert_eq!(
+        rr.encode(),
+        Err(too_large(
+            "RTCP report block cumulative lost",
+            0x00FF_FFFF,
+            0x0100_0000
+        ))
+    );
+    let sr = SenderReport {
+        reports: vec![block(0x0100_0000)],
+        ..SenderReport::default()
+    };
+    assert!(sr.encode().is_err());
+    let ok = ReceiverReport {
+        ssrc: 1,
+        reports: vec![block(0x00FF_FFFF)],
+    };
+    assert_eq!(
+        RtcpPacket::parse(&ok.encode().unwrap()).unwrap(),
+        RtcpPacket::ReceiverReport(ok)
+    );
 }

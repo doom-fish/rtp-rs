@@ -306,7 +306,7 @@ impl RtpPacketBuilder {
     /// Set the payload type.
     #[must_use]
     pub fn payload_type(mut self, pt: u8) -> Self {
-        self.header.payload_type = pt & 0x7F;
+        self.header.payload_type = pt;
         self
     }
 
@@ -365,9 +365,10 @@ impl RtpPacketBuilder {
     /// # Errors
     /// Returns the [`extension::encode`] error for an extension that cannot be
     /// encoded (out-of-range element ID or length), and
-    /// [`crate::Error::TooLarge`] for more than 15 CSRCs, an extension block
-    /// longer than 65 535 32-bit words, or a [`pad_to`](Self::pad_to)
-    /// alignment above 256 bytes (the padding count is a single byte).
+    /// [`crate::Error::TooLarge`] for a payload type above 127, more than 15
+    /// CSRCs, an extension block longer than 65 535 32-bit words, or a
+    /// [`pad_to`](Self::pad_to) alignment above 256 bytes (the padding count
+    /// is a single byte).
     pub fn build(mut self) -> Result<RtpPacketOwned> {
         ensure_at_most("padding alignment", self.pad_to, 256)?;
         if !self.extensions.is_empty() {

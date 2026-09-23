@@ -26,7 +26,12 @@ impl ReportBlock {
     /// Serialized length of a report block.
     pub const LEN: usize = 24;
 
-    pub(crate) fn write(&self, out: &mut Vec<u8>) {
+    pub(crate) fn write(&self, out: &mut Vec<u8>) -> Result<()> {
+        ensure_at_most(
+            "RTCP report block cumulative lost",
+            self.cumulative_lost as usize,
+            0x00FF_FFFF,
+        )?;
         out.extend_from_slice(&self.ssrc.to_be_bytes());
         let fl_cl =
             (u32::from(self.fraction_lost) << 24) | (self.cumulative_lost & 0x00FF_FFFF);
@@ -35,6 +40,7 @@ impl ReportBlock {
         out.extend_from_slice(&self.jitter.to_be_bytes());
         out.extend_from_slice(&self.last_sr.to_be_bytes());
         out.extend_from_slice(&self.delay_since_last_sr.to_be_bytes());
+        Ok(())
     }
 
     pub(crate) fn parse(buf: &[u8], off: usize) -> Self {
@@ -70,7 +76,8 @@ impl ReceiverReport {
     /// Serialize this packet (with header).
     ///
     /// # Errors
-    /// Returns [`Error::TooLarge`] for more than 31 report blocks.
+    /// Returns [`Error::TooLarge`] for more than 31 report blocks or a
+    /// `cumulative_lost` wider than 24 bits.
     pub fn encode(&self) -> Result<Vec<u8>> {
         ensure_at_most("RTCP receiver report block count", self.reports.len(), 31)?;
         let body_len = 4 + self.reports.len() * ReportBlock::LEN;
@@ -78,7 +85,7 @@ impl ReceiverReport {
         write_header(&mut out, self.reports.len() as u8, PT_RR, body_len)?;
         out.extend_from_slice(&self.ssrc.to_be_bytes());
         for b in &self.reports {
-            b.write(&mut out);
+            b.write(&mut out)?;
         }
         Ok(out)
     }

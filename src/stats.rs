@@ -111,7 +111,7 @@ impl ReceptionStats {
         crate::rtcp::rr::ReportBlock {
             ssrc: self.ssrc,
             fraction_lost: self.fraction_lost(),
-            cumulative_lost: self.cumulative_lost() & 0x00FF_FFFF,
+            cumulative_lost: self.cumulative_lost().min(0x007F_FFFF),
             extended_highest_seq: self.extended_highest_seq(),
             jitter: self.jitter(),
             last_sr: self.last_sr,

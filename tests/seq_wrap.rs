@@ -1,6 +1,7 @@
 //! Sequence-number comparison, wrap handling and the RFC 3550 A.1 heuristic.
 
 use rtp::seq::{seq_diff, seq_greater_than, seq_less_than, SourceState};
+use rtp::{ReceptionStats, RtcpPacket};
 
 #[test]
 fn ordering_across_wrap() {
@@ -93,4 +94,24 @@ fn counters_wrap_instead_of_overflowing() {
         s.extended_max(),
         u32::from(seq).wrapping_add(wraps.wrapping_mul(65_536))
     );
+}
+
+#[test]
+fn report_block_clamps_cumulative_loss_to_the_signed_24_bit_maximum() {
+    let mut stats = ReceptionStats::new(7, 0);
+    stats.on_packet(0, 0, 0);
+    stats.on_packet(1, 0, 0);
+    let mut seq = 1u16;
+    for _ in 0..3000 {
+        seq = seq.wrapping_add(2999);
+        stats.on_packet(seq, 0, 0);
+    }
+    assert!(stats.cumulative_lost() > 0x007F_FFFF);
+    let block = stats.to_report_block(0);
+    assert_eq!(block.cumulative_lost, 0x007F_FFFF);
+    let rr = RtcpPacket::receiver_report()
+        .ssrc(1)
+        .add_block(block)
+        .build();
+    assert!(rr.encode().is_ok());
 }
