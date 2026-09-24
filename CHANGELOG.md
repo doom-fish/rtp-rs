@@ -60,8 +60,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RtpHeader::set_payload_type` returns `Result`, and `RtpHeader::write` and
   `RtpPacketBuilder::build` (whose `payload_type` no longer masks) fail for a
   payload type above 127. `Sli::encode` fails for a `first` or `number` above
-  8191 or a `picture_id` above 63. RR and SR `encode` fail for a
-  `cumulative_lost` wider than 24 bits.
+  8191 or a `picture_id` above 63.
+- **Breaking:** `ReportBlock::cumulative_lost` is an `i32`, because RFC 3550
+  §6.4.1 defines the field as a signed 24-bit count. Parsing sign-extends it
+  (a reported -1 was read as 16 777 215), and RR and SR `encode` fail with
+  `Error::OutOfRange` outside -8 388 608..=8 388 607 instead of masking; the
+  old check accepted 0x800000..=0xFFFFFF and sent it as a negative count.
 - **Breaking:** the `Packet` trait is sealed; only `RtpPacket` and
   `RtpPacketOwned` implement it. Consumers such as SRTP derive the IV from
   `header()` while encrypting `as_bytes()`, so a foreign implementation whose
@@ -72,7 +76,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `Error::TooLarge { what, max, actual }`.
+- `Error::TooLarge { what, max, actual }` and
+  `Error::OutOfRange { what, min, max, actual }`.
 - `h264::DEFAULT_MAX_NAL_SIZE` and `h264::Depacketizer::with_max_nal_size`.
 - `rtcp::twcc::MAX_STATUSES`.
 - Regression tests for malformed and oversize input.

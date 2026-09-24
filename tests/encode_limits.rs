@@ -289,34 +289,47 @@ fn sli_fields_must_fit_their_bit_widths() {
 }
 
 #[test]
-fn cumulative_lost_must_fit_24_bits() {
-    let block = |cumulative_lost| ReportBlock {
-        cumulative_lost,
-        ..ReportBlock::default()
-    };
-    let rr = ReceiverReport {
+fn cumulative_lost_is_a_signed_24_bit_field() {
+    let rr = |cumulative_lost| ReceiverReport {
         ssrc: 1,
-        reports: vec![block(0x0100_0000)],
+        reports: vec![ReportBlock {
+            cumulative_lost,
+            ..ReportBlock::default()
+        }],
     };
-    assert_eq!(
-        rr.encode(),
-        Err(too_large(
-            "RTCP report block cumulative lost",
-            0x00FF_FFFF,
-            0x0100_0000
-        ))
-    );
+    let out_of_range = |actual| Error::OutOfRange {
+        what: "RTCP report block cumulative lost",
+        min: -0x80_0000,
+        max: 0x7F_FFFF,
+        actual,
+    };
+    assert_eq!(rr(0x80_0000).encode(), Err(out_of_range(0x80_0000)));
+    assert_eq!(rr(-0x80_0001).encode(), Err(out_of_range(-0x80_0001)));
     let sr = SenderReport {
-        reports: vec![block(0x0100_0000)],
+        reports: rr(0x0100_0000).reports,
         ..SenderReport::default()
     };
-    assert!(sr.encode().is_err());
-    let ok = ReceiverReport {
-        ssrc: 1,
-        reports: vec![block(0x00FF_FFFF)],
+    assert_eq!(sr.encode(), Err(out_of_range(0x0100_0000)));
+
+    for lost in [-0x80_0000, -1, 0, 1, 0x7F_FFFF] {
+        let report = rr(lost);
+        assert_eq!(
+            RtcpPacket::parse(&report.encode().unwrap()).unwrap(),
+            RtcpPacket::ReceiverReport(report)
+        );
+    }
+
+    let wire = rr(-1).encode().unwrap();
+    assert_eq!(&wire[13..16], &[0xFF, 0xFF, 0xFF]);
+    let wire = rr(-0x80_0000).encode().unwrap();
+    assert_eq!(&wire[13..16], &[0x80, 0x00, 0x00]);
+
+    let mut wire = rr(0).encode().unwrap();
+    wire[12] = 0x40;
+    wire[13..16].copy_from_slice(&[0xFF, 0xFF, 0xFE]);
+    let RtcpPacket::ReceiverReport(parsed) = RtcpPacket::parse(&wire).unwrap() else {
+        panic!("expected a receiver report");
     };
-    assert_eq!(
-        RtcpPacket::parse(&ok.encode().unwrap()).unwrap(),
-        RtcpPacket::ReceiverReport(ok)
-    );
+    assert_eq!(parsed.reports[0].fraction_lost, 0x40);
+    assert_eq!(parsed.reports[0].cumulative_lost, -2);
 }

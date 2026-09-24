@@ -3,6 +3,9 @@
 use super::{be_u32, write_header, Header, PT_RR};
 use crate::error::{ensure_at_most, Error, Result};
 
+pub(crate) const CUMULATIVE_LOST_MIN: i32 = -0x80_0000;
+pub(crate) const CUMULATIVE_LOST_MAX: i32 = 0x7F_FFFF;
+
 /// A single reception report block (24 bytes), used by both RR and SR.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ReportBlock {
@@ -10,8 +13,8 @@ pub struct ReportBlock {
     pub ssrc: u32,
     /// Fraction of packets lost since the previous report (8-bit fixed point).
     pub fraction_lost: u8,
-    /// Cumulative number of packets lost (24-bit, stored in low bits).
-    pub cumulative_lost: u32,
+    /// Cumulative number of packets lost (signed 24-bit).
+    pub cumulative_lost: i32,
     /// Extended highest sequence number received.
     pub extended_highest_seq: u32,
     /// Interarrival jitter.
@@ -27,14 +30,17 @@ impl ReportBlock {
     pub const LEN: usize = 24;
 
     pub(crate) fn write(&self, out: &mut Vec<u8>) -> Result<()> {
-        ensure_at_most(
-            "RTCP report block cumulative lost",
-            self.cumulative_lost as usize,
-            0x00FF_FFFF,
-        )?;
+        if !(CUMULATIVE_LOST_MIN..=CUMULATIVE_LOST_MAX).contains(&self.cumulative_lost) {
+            return Err(Error::OutOfRange {
+                what: "RTCP report block cumulative lost",
+                min: CUMULATIVE_LOST_MIN.into(),
+                max: CUMULATIVE_LOST_MAX.into(),
+                actual: self.cumulative_lost.into(),
+            });
+        }
         out.extend_from_slice(&self.ssrc.to_be_bytes());
-        let fl_cl =
-            (u32::from(self.fraction_lost) << 24) | (self.cumulative_lost & 0x00FF_FFFF);
+        let fl_cl = (u32::from(self.fraction_lost) << 24)
+            | (self.cumulative_lost as u32 & 0x00FF_FFFF);
         out.extend_from_slice(&fl_cl.to_be_bytes());
         out.extend_from_slice(&self.extended_highest_seq.to_be_bytes());
         out.extend_from_slice(&self.jitter.to_be_bytes());
@@ -48,7 +54,7 @@ impl ReportBlock {
         Self {
             ssrc: be_u32(buf, off),
             fraction_lost: (fl_cl >> 24) as u8,
-            cumulative_lost: fl_cl & 0x00FF_FFFF,
+            cumulative_lost: ((fl_cl << 8) as i32) >> 8,
             extended_highest_seq: be_u32(buf, off + 8),
             jitter: be_u32(buf, off + 12),
             last_sr: be_u32(buf, off + 16),
@@ -76,8 +82,9 @@ impl ReceiverReport {
     /// Serialize this packet (with header).
     ///
     /// # Errors
-    /// Returns [`Error::TooLarge`] for more than 31 report blocks or a
-    /// `cumulative_lost` wider than 24 bits.
+    /// Returns [`Error::TooLarge`] for more than 31 report blocks and
+    /// [`Error::OutOfRange`] for a `cumulative_lost` outside the signed 24-bit
+    /// range.
     pub fn encode(&self) -> Result<Vec<u8>> {
         ensure_at_most("RTCP receiver report block count", self.reports.len(), 31)?;
         let body_len = 4 + self.reports.len() * ReportBlock::LEN;

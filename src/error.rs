@@ -52,6 +52,13 @@ pub enum Error {
         max: usize,
         actual: usize,
     },
+    #[allow(missing_docs)]
+    OutOfRange {
+        what: &'static str,
+        min: i64,
+        max: i64,
+        actual: i64,
+    },
 }
 
 pub(crate) const fn ensure_at_most(what: &'static str, actual: usize, max: usize) -> Result<()> {
@@ -80,6 +87,12 @@ impl fmt::Display for Error {
             Self::TooLarge { what, max, actual } => {
                 write!(f, "{what} is {actual}, the limit is {max}")
             }
+            Self::OutOfRange {
+                what,
+                min,
+                max,
+                actual,
+            } => write!(f, "{what} is {actual}, the range is {min}..={max}"),
         }
     }
 }
