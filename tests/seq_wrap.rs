@@ -109,9 +109,6 @@ fn report_block_clamps_cumulative_loss_to_the_signed_24_bit_maximum() {
     assert!(stats.cumulative_lost() > 0x007F_FFFF);
     let block = stats.to_report_block(0);
     assert_eq!(block.cumulative_lost, 0x007F_FFFF);
-    let rr = RtcpPacket::receiver_report()
-        .ssrc(1)
-        .add_block(block)
-        .build();
+    let rr = RtcpPacket::receiver_report(1).add_block(block).build();
     assert!(rr.encode().is_ok());
 }

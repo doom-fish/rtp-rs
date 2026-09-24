@@ -78,8 +78,8 @@ pub enum RtcpPacket {
 impl RtcpPacket {
     /// Start building a receiver report.
     #[must_use]
-    pub fn receiver_report() -> rr::ReceiverReportBuilder {
-        rr::ReceiverReport::builder()
+    pub fn receiver_report(ssrc: u32) -> rr::ReceiverReportBuilder {
+        rr::ReceiverReport::builder(ssrc)
     }
 
     /// Start building a sender report.
@@ -88,27 +88,20 @@ impl RtcpPacket {
         sr::SenderReport::builder(ssrc)
     }
 
-    /// Build a generic NACK for `media_ssrc` covering the given lost sequence
-    /// numbers.
-    #[must_use]
-    pub fn nack(media_ssrc: u32, lost: &[u16]) -> nack::Nack {
-        nack::Nack::from_lost(0, media_ssrc, lost)
-    }
-
     /// Build a picture-loss indication for `media_ssrc`.
     #[must_use]
-    pub fn pli(media_ssrc: u32) -> pli::Pli {
+    pub fn pli(sender_ssrc: u32, media_ssrc: u32) -> pli::Pli {
         pli::Pli {
-            sender_ssrc: 0,
+            sender_ssrc,
             media_ssrc,
         }
     }
 
     /// Build a full-intra-request for `media_ssrc` with sequence number `seq`.
     #[must_use]
-    pub fn fir(media_ssrc: u32, seq: u8) -> fir::Fir {
+    pub fn fir(sender_ssrc: u32, media_ssrc: u32, seq: u8) -> fir::Fir {
         fir::Fir {
-            sender_ssrc: 0,
+            sender_ssrc,
             media_ssrc: 0,
             entries: vec![fir::FirEntry {
                 ssrc: media_ssrc,

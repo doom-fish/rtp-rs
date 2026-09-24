@@ -70,6 +70,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RtpPacketOwned` implement it. Consumers such as SRTP derive the IV from
   `header()` while encrypting `as_bytes()`, so a foreign implementation whose
   header disagreed with its bytes could reuse a keystream.
+- **Breaking:** the RTCP convenience constructors take the SSRC of the packet
+  sender instead of silently sending 0 (RFC 3550 §6.4.2, RFC 4585 §6.1):
+  `RtcpPacket::pli(sender_ssrc, media_ssrc)`,
+  `RtcpPacket::fir(sender_ssrc, media_ssrc, seq)` and
+  `RtcpPacket::receiver_report(ssrc)` / `ReceiverReport::builder(ssrc)`.
+  `ReceiverReportBuilder` loses its `ssrc` setter and `Default`, and
+  `RtcpPacket::nack` is removed in favour of
+  `Nack::from_lost(sender_ssrc, media_ssrc, lost)`.
 - `CompoundPacket::parse` checks that the first packet on the wire is an SR
   or RR, since unknown packets are now skipped.
 - `rust-version` is 1.82.

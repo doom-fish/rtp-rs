@@ -185,7 +185,7 @@ fn rtcp_length_field_overflow_is_rejected() {
     );
 
     let compound = CompoundPacket::new()
-        .add(RtcpPacket::receiver_report().ssrc(1).build())
+        .add(RtcpPacket::receiver_report(1).build())
         .add(nack.into());
     assert!(compound.encode().is_err());
 }

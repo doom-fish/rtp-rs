@@ -1,13 +1,14 @@
 //! Build and parse an RTCP compound packet (RR + NACK + PLI).
 
+use rtp::rtcp::nack::Nack;
 use rtp::rtcp::rr::ReportBlock;
 use rtp::{CompoundPacket, RtcpPacket};
 
 fn main() {
+    let local_ssrc = 0xFEED_FACE;
     let media_ssrc = 0x1234_5678;
 
-    let rr = RtcpPacket::receiver_report()
-        .ssrc(0xFEED_FACE)
+    let rr = RtcpPacket::receiver_report(local_ssrc)
         .add_block(ReportBlock {
             ssrc: media_ssrc,
             fraction_lost: 12,
@@ -19,8 +20,8 @@ fn main() {
         })
         .build();
 
-    let nack = RtcpPacket::nack(media_ssrc, &[17, 18, 20, 100]);
-    let pli = RtcpPacket::pli(media_ssrc);
+    let nack = Nack::from_lost(local_ssrc, media_ssrc, &[17, 18, 20, 100]);
+    let pli = RtcpPacket::pli(local_ssrc, media_ssrc);
 
     let compound = CompoundPacket::new()
         .add(rr)

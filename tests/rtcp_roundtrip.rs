@@ -34,8 +34,7 @@ fn sender_report_round_trip() {
 
 #[test]
 fn receiver_report_round_trip() {
-    let rr = RtcpPacket::receiver_report()
-        .ssrc(0xFEED_FACE)
+    let rr = RtcpPacket::receiver_report(0xFEED_FACE)
         .add_block(ReportBlock {
             ssrc: 0x1234,
             fraction_lost: 0,
@@ -51,7 +50,8 @@ fn receiver_report_round_trip() {
 
 #[test]
 fn nack_round_trip_and_expansion() {
-    let nack: RtcpPacket = RtcpPacket::nack(0xABCD, &[10, 11, 12, 50]).into();
+    let nack: RtcpPacket =
+        rtp::rtcp::nack::Nack::from_lost(0x1111, 0xABCD, &[10, 11, 12, 50]).into();
     if let RtcpPacket::Nack(n) = &nack {
         assert_eq!(n.lost_sequence_numbers(), vec![10, 11, 12, 50]);
     } else {
@@ -62,8 +62,33 @@ fn nack_round_trip_and_expansion() {
 
 #[test]
 fn pli_round_trip() {
-    let pli: RtcpPacket = RtcpPacket::pli(0x4242).into();
+    let pli: RtcpPacket = RtcpPacket::pli(0x1111, 0x4242).into();
     assert_eq!(round_trip(&pli), pli);
+}
+
+#[test]
+fn constructors_put_the_given_ssrcs_on_the_wire() {
+    let pli = RtcpPacket::pli(0x1111, 0x4242).encode().unwrap();
+    assert_eq!(&pli[4..12], &[0, 0, 0x11, 0x11, 0, 0, 0x42, 0x42]);
+
+    let fir = RtcpPacket::fir(0x1111, 0x4242, 7);
+    assert_eq!(
+        fir,
+        Fir {
+            sender_ssrc: 0x1111,
+            media_ssrc: 0,
+            entries: vec![FirEntry {
+                ssrc: 0x4242,
+                seq_nr: 7,
+            }],
+        }
+    );
+
+    let rr = RtcpPacket::receiver_report(0xFEED_FACE)
+        .build()
+        .encode()
+        .unwrap();
+    assert_eq!(&rr[4..8], &[0xFE, 0xED, 0xFA, 0xCE]);
 }
 
 #[test]

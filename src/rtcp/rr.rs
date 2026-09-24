@@ -75,8 +75,13 @@ pub struct ReceiverReport {
 impl ReceiverReport {
     /// Start a builder.
     #[must_use]
-    pub fn builder() -> ReceiverReportBuilder {
-        ReceiverReportBuilder::default()
+    pub fn builder(ssrc: u32) -> ReceiverReportBuilder {
+        ReceiverReportBuilder {
+            rr: Self {
+                ssrc,
+                reports: Vec::new(),
+            },
+        }
     }
 
     /// Serialize this packet (with header).
@@ -127,19 +132,12 @@ impl ReceiverReport {
 }
 
 /// Builder for [`ReceiverReport`].
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ReceiverReportBuilder {
     rr: ReceiverReport,
 }
 
 impl ReceiverReportBuilder {
-    /// Set the reporter SSRC.
-    #[must_use]
-    pub fn ssrc(mut self, ssrc: u32) -> Self {
-        self.rr.ssrc = ssrc;
-        self
-    }
-
     /// Add a reception report block.
     #[must_use]
     pub fn add_block(mut self, block: ReportBlock) -> Self {

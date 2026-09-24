@@ -71,11 +71,12 @@ for (seq, p) in (first_seq..).zip(&payloads) {
 RTCP compound packet:
 
 ```rust
+use rtp::rtcp::nack::Nack;
 use rtp::{CompoundPacket, RtcpPacket};
 
-let rr = RtcpPacket::receiver_report().ssrc(0xFEED_FACE).build();
-let nack = RtcpPacket::nack(media_ssrc, &[17, 18, 20]);
-let pli = RtcpPacket::pli(media_ssrc);
+let rr = RtcpPacket::receiver_report(local_ssrc).build();
+let nack = Nack::from_lost(local_ssrc, media_ssrc, &[17, 18, 20]);
+let pli = RtcpPacket::pli(local_ssrc, media_ssrc);
 
 let compound = CompoundPacket::new()
     .add(rr)
