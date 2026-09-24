@@ -69,15 +69,16 @@ Packetization mode 1 only; interleaved mode (2) is out of scope.
 | TWCC status count | `rtcp::twcc::MAX_STATUSES` (32 768) |
 | REMB bitrate | rejected when `mantissa << exp` overflows 64 bits |
 | RTCP padding | honoured; a zero or oversized padding count is rejected |
-| Encoders | counts and lengths that do not fit their wire field return `Error::TooLarge` |
+| Encoders | counts and lengths that do not fit their wire field return `Error::TooLarge`; field values outside their range (payload type, SLI fields, the signed cumulative-lost count) return `Error::TooLarge` or `Error::OutOfRange`; the TWCC reference time and abs-send-time wrap modulo their field width |
 
 ## Validation
 
-- 68 integration tests plus a crate doctest cover header, extension, RTCP
+- 73 integration tests plus a crate doctest cover header, extension, RTCP
   (SR/RR/NACK/PLI/FIR/SLI/REMB/TWCC), H.264 packetize/depacketize, Opus TOC,
   sequence-number wrap and jitter round-trips, and malformed input: unknown
   and padded RTCP packets, TWCC expansion, REMB overflow, unterminated or
-  interrupted FU-A sequences, and oversize encoder input.
+  interrupted FU-A sequences, oversize encoder input and out-of-range field
+  values.
 - `cargo clippy --all-targets --all-features -- -D warnings` is clean with
   `pedantic` and `nursery` lint groups enabled (intentional wire-codec casts are allowed
   crate-wide; see `src/lib.rs`).

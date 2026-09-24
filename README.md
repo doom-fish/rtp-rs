@@ -97,7 +97,11 @@ the RTCP padding bit.
 - TWCC feedback announcing more than `rtcp::twcc::MAX_STATUSES` (32 768)
   statuses is rejected.
 - Encoders return `Error::TooLarge` for any count or length that does not fit
-  its wire field; nothing is silently truncated.
+  its wire field, and `Error::TooLarge` or `Error::OutOfRange` for a field
+  value outside its range (payload type, SLI fields, the signed
+  cumulative-lost count); nothing is silently truncated. Only the wrapping
+  clocks, the TWCC reference time and abs-send-time, are reduced modulo their
+  field width.
 
 ## The borrowing contract
 
