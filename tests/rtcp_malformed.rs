@@ -61,10 +61,10 @@ fn strict_parse_still_requires_a_report_first_on_the_wire() {
         CompoundPacket::parse(&XR),
         Err(Error::BadCompound(_))
     ));
-    assert!(CompoundPacket::parse_lenient(&XR)
-        .unwrap()
-        .packets
-        .is_empty());
+    assert_eq!(
+        CompoundPacket::parse_lenient(&XR).unwrap().packets,
+        [] as [rtp::RtcpPacket; 0]
+    );
 }
 
 #[test]
